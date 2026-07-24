@@ -22,6 +22,7 @@ from services.risk_service import (
     build_score_table,
 )
 from utils.assumptions import PORTFOLIO_PRESETS, RISK_BANDS, RISK_QUESTIONS
+from utils.formatting import format_percent
 
 
 def all_answers(score: int) -> dict[str, int]:
@@ -378,11 +379,11 @@ def test_all_profiles_table_lists_every_band() -> None:
 
 
 def test_narrative_names_the_level_and_portfolio() -> None:
-    """The narrative must state the descriptive label and nearest portfolio."""
+    """The narrative must state the descriptive label and the interpolated figures."""
     profile = score_questionnaire(all_answers(5))
     narrative = build_profile_narrative(profile)
     assert profile.descriptive_label in narrative
-    assert profile.nearest_preset in narrative
+    assert format_percent(profile.expected_return) in narrative
 
 
 def test_default_answers_covers_all_questions() -> None:
