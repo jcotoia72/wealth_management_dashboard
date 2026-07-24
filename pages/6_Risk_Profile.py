@@ -99,14 +99,24 @@ def render_questionnaire() -> dict[str, int]:
 def render_results(profile) -> None:
     """Render the scored profile, breakdown and planner hand-off."""
     section_header("Recommended profile")
+
+    # The descriptive label can be two words ("Cautious Aggressive"), which looks
+    # cramped in a metric card. Present it as a headline line instead, with the three
+    # numeric results in metric cards below where the large-number styling suits them.
+    st.markdown(
+        f"<p style='font-size:1.35rem; font-weight:600; color:#14304a; "
+        f"margin-bottom:0.2rem;'>{profile.descriptive_label}</p>"
+        f"<p class='app-subtitle' style='margin-top:0;'>Overall risk score "
+        f"{profile.overall_score:.0f} / 100</p>",
+        unsafe_allow_html=True,
+    )
+
     render_metric_row(
         [
-            ("Risk profile", profile.descriptive_label, "Position within the risk spectrum."),
             (
-                "Closest model",
-                profile.nearest_preset,
-                "The nearest reference portfolio. Assumptions are interpolated, not "
-                "taken from this preset.",
+                "Overall score",
+                f"{profile.overall_score:.0f} / 100",
+                "The lower of the tolerance and capacity scores.",
             ),
             (
                 "Expected return",
