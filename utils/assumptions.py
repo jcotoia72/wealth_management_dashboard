@@ -223,3 +223,32 @@ RISK_BANDS: Final[list[dict[str, Any]]] = [
     {"level": "Growth", "min": 55.0, "max": 75.0, "preset": "Growth (80/20)"},
     {"level": "Aggressive", "min": 75.0, "max": 100.01, "preset": "Aggressive (100/0)"},
 ]
+
+# ---------------------------------------------------------------------------
+# Continuous risk-to-portfolio mapping
+# ---------------------------------------------------------------------------
+# Rather than snapping a questionnaire score to one of the preset portfolios, the
+# engine interpolates a return/volatility point along a spectrum. This preserves the
+# granularity the questionnaire actually captured: two clients scoring 56 and 74 both
+# sit in the "Growth" band but receive different, defensible assumptions.
+#
+# The spectrum is anchored on financially sensible endpoints for a diversified
+# portfolio, NOT on any two presets, so score 0 and score 100 land on meaningful
+# bounds. The named presets remain as reference labels only.
+#
+#   score 0   -> a bond-heavy conservative mix
+#   score 100 -> a broadly all-equity mix
+#
+# Return and volatility use different curve shapes: volatility rises faster than
+# return as risk increases, reflecting diminishing risk-adjusted reward (the reason
+# risk tolerance matters at all). The exponents below are applied to the normalised
+# 0-1 score. An exponent < 1 front-loads growth; > 1 back-loads it.
+RISK_SPECTRUM: Final[dict[str, float]] = {
+    "return_floor": 0.040,   # score 0: conservative real-plus-inflation return
+    "return_ceiling": 0.090,  # score 100: all-equity nominal return
+    "return_curve": 0.85,     # slight front-loading: return gains taper near the top
+    "volatility_floor": 0.050,   # score 0: low-volatility bond-heavy mix
+    "volatility_ceiling": 0.180,  # score 100: all-equity volatility
+    "volatility_curve": 1.30,     # back-loaded: volatility accelerates toward the top
+    "rounding": 0.0025,       # round interpolated rates to the nearest 0.25%
+}
