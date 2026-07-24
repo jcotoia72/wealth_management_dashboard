@@ -8,7 +8,7 @@ investment-committee review of a planning tool would ask for.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
 # ---------------------------------------------------------------------------
 # Default input values shown in the sidebar
@@ -91,3 +91,135 @@ PORTFOLIO_PRESETS: Final[dict[str, dict[str, float]]] = {
     "Aggressive (100/0)": {"expected_return": 0.085, "volatility": 0.170},
     "Custom": {},
 }
+
+# ---------------------------------------------------------------------------
+# Risk Profile questionnaire configuration
+# ---------------------------------------------------------------------------
+# The questionnaire separates two distinct ideas that are easy to conflate:
+#   * Risk TOLERANCE  — how a client feels about volatility (psychological).
+#   * Risk CAPACITY   — how much risk their financial situation can absorb
+#                       (objective: time horizon, income stability, reserves).
+# A client can be willing but unable, or able but unwilling. Scoring them
+# separately and then reconciling the two is standard suitability practice and
+# is more defensible than a single blended number.
+#
+# Each question carries a weight. Each option carries a score from 1 (most
+# conservative) to 5 (most aggressive). The category score is the weighted
+# average of answered options, rescaled to 0-100.
+
+RISK_QUESTIONS: Final[list[dict[str, Any]]] = [
+    {
+        "id": "horizon",
+        "category": "capacity",
+        "weight": 2.0,
+        "text": "When do you expect to start drawing on this money?",
+        "options": [
+            ("Within 3 years", 1),
+            ("3 to 7 years", 2),
+            ("8 to 15 years", 3),
+            ("16 to 25 years", 4),
+            ("More than 25 years", 5),
+        ],
+    },
+    {
+        "id": "income_stability",
+        "category": "capacity",
+        "weight": 1.5,
+        "text": "How stable is your current income?",
+        "options": [
+            ("Very unstable or irregular", 1),
+            ("Somewhat unstable", 2),
+            ("Reasonably stable", 3),
+            ("Stable and secure", 4),
+            ("Very secure with strong growth prospects", 5),
+        ],
+    },
+    {
+        "id": "emergency_reserve",
+        "category": "capacity",
+        "weight": 1.0,
+        "text": "If you lost your income, how long could your cash reserves cover expenses?",
+        "options": [
+            ("Less than 1 month", 1),
+            ("1 to 3 months", 2),
+            ("3 to 6 months", 3),
+            ("6 to 12 months", 4),
+            ("More than 12 months", 5),
+        ],
+    },
+    {
+        "id": "portfolio_share",
+        "category": "capacity",
+        "weight": 1.0,
+        "text": "Roughly what share of your total net worth does this portfolio represent?",
+        "options": [
+            ("Nearly all of it", 1),
+            ("More than half", 2),
+            ("About half", 3),
+            ("Less than half", 4),
+            ("A small fraction", 5),
+        ],
+    },
+    {
+        "id": "reaction_to_loss",
+        "category": "tolerance",
+        "weight": 2.0,
+        "text": "If this portfolio fell 20% in a year, what would you most likely do?",
+        "options": [
+            ("Sell everything to stop further losses", 1),
+            ("Sell some to reduce risk", 2),
+            ("Do nothing and wait for recovery", 3),
+            ("Keep contributing as planned", 4),
+            ("Invest more to buy at lower prices", 5),
+        ],
+    },
+    {
+        "id": "volatility_comfort",
+        "category": "tolerance",
+        "weight": 1.5,
+        "text": "Which portfolio would you be most comfortable holding?",
+        "options": [
+            ("Small, steady gains; very rare small losses", 1),
+            ("Modest gains; occasional small losses", 2),
+            ("Higher gains; some moderate down years", 3),
+            ("Strong gains; regular volatility", 4),
+            ("Highest potential gains; large swings both ways", 5),
+        ],
+    },
+    {
+        "id": "priority",
+        "category": "tolerance",
+        "weight": 1.5,
+        "text": "Which statement best describes your primary goal?",
+        "options": [
+            ("Protecting my money is far more important than growing it", 1),
+            ("I lean toward protection over growth", 2),
+            ("I want a balance of growth and protection", 3),
+            ("I lean toward growth and accept the risk", 4),
+            ("Maximising long-term growth is my clear priority", 5),
+        ],
+    },
+    {
+        "id": "experience",
+        "category": "tolerance",
+        "weight": 1.0,
+        "text": "How would you describe your investing experience?",
+        "options": [
+            ("None; this is new to me", 1),
+            ("A little; mostly savings accounts", 2),
+            ("Some; I hold funds or a retirement account", 3),
+            ("Experienced; I actively manage investments", 4),
+            ("Very experienced across many asset types", 5),
+        ],
+    },
+]
+
+# Score bands map a 0-100 category score to a risk level. The upper bound of each
+# band is exclusive except the last. These bands are a presentation convention,
+# not a regulatory standard.
+RISK_BANDS: Final[list[dict[str, Any]]] = [
+    {"level": "Conservative", "min": 0.0, "max": 35.0, "preset": "Conservative (30/70)"},
+    {"level": "Moderate", "min": 35.0, "max": 55.0, "preset": "Moderate (60/40)"},
+    {"level": "Growth", "min": 55.0, "max": 75.0, "preset": "Growth (80/20)"},
+    {"level": "Aggressive", "min": 75.0, "max": 100.01, "preset": "Aggressive (100/0)"},
+]
