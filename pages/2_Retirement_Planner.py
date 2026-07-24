@@ -56,6 +56,18 @@ page_header(
     "thousands of simulated market paths.",
 )
 
+# If the Risk Profile module sent portfolio assumptions here, surface them so the user
+# knows what values to set. (Streamlit widget defaults are fixed at creation, so the
+# cleanest cross-page hand-off is to show the target values rather than force them.)
+_prefill = st.session_state.get("planner_prefill_assumptions")
+if _prefill is not None:
+    st.info(
+        f"**Risk Profile suggestion available.** The {_prefill['source']} profile "
+        f"recommends an expected return of {_prefill['expected_return'] * 100:.1f}% and "
+        f"volatility of {_prefill['volatility'] * 100:.1f}%. Set the investment-assumption "
+        "sliders in the sidebar to these values to run that profile."
+    )
+
 
 def _collect_inputs() -> dict[str, object]:
     """Render every sidebar widget and return the raw input values.
