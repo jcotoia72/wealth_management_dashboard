@@ -228,3 +228,151 @@ def percentile_band_chart(results: SimulationResults) -> go.Figure:
     figure.update_yaxes(tickprefix="$", separatethousands=True, gridcolor=COLOR_GRID)
     figure.update_xaxes(gridcolor=COLOR_GRID)
     return figure
+
+
+# ---------------------------------------------------------------------------
+# Scenario comparison charts
+# ---------------------------------------------------------------------------
+# A colour-blind-safe qualitative palette, muted to suit a financial deliverable.
+SCENARIO_COLORS = [
+    "#1f5a8c",  # deep blue
+    "#8c5a1f",  # ochre
+    "#3d7a5a",  # green
+    "#7a3d5a",  # plum
+    "#5a5a8c",  # slate violet
+    "#8c7a3d",  # olive
+]
+
+
+def scenario_median_paths_chart(scenarios: list) -> go.Figure:
+    """Overlay the median projected path of several scenarios on one chart.
+
+    Only median paths are shown. Drawing percentile bands for every scenario would
+    produce overlapping shading that is impossible to read.
+    """
+    figure = go.Figure()
+
+    for index, scenario in enumerate(scenarios):
+        results = scenario.results
+        color = SCENARIO_COLORS[index % len(SCENARIO_COLORS)]
+        medians = results.percentile_paths(percentiles=(50,))["p50"]
+
+        figure.add_trace(
+            go.Scatter(
+                x=results.ages,
+                y=medians,
+                mode="lines",
+                name=scenario.name,
+                line=dict(color=color, width=2.4),
+                hovertemplate=f"{scenario.name}<br>Age %{{x}}<br>%{{y:$,.0f}}<extra></extra>",
+            )
+        )
+        # Mark each scenario's own retirement age, since they may differ.
+        figure.add_vline(
+            x=results.inputs.retirement_age,
+            line=dict(color=color, width=1.1, dash="dot"),
+            opacity=0.55,
+        )
+
+    basis = (
+        "today's dollars"
+        if scenarios and scenarios[0].results.inputs.show_in_todays_dollars
+        else "nominal dollars"
+    )
+    figure.update_layout(
+        title=f"Median projected balance by scenario ({basis})",
+        xaxis_title="Age",
+        yaxis_title=f"Portfolio balance ({basis})",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.24, xanchor="left", x=0),
+        height=500,
+        **_LAYOUT_DEFAULTS,
+    )
+    figure.update_yaxes(tickprefix="$", separatethousands=True, gridcolor=COLOR_GRID)
+    figure.update_xaxes(gridcolor=COLOR_GRID)
+    return figure
+
+
+def scenario_success_chart(scenarios: list) -> go.Figure:
+    """Horizontal bar chart of success probability by scenario.
+
+    Horizontal bars are used so long scenario names stay readable.
+    """
+    names = [scenario.name for scenario in scenarios]
+    probabilities = [scenario.results.success_probability * 100 for scenario in scenarios]
+    colors = [SCENARIO_COLORS[i % len(SCENARIO_COLORS)] for i in range(len(scenarios))]
+
+    figure = go.Figure(
+        go.Bar(
+            x=probabilities,
+            y=names,
+            orientation="h",
+            marker=dict(color=colors),
+            text=[f"{value:.1f}%" for value in probabilities],
+            textposition="outside",
+            hovertemplate="%{y}<br>Success probability %{x:.1f}%<extra></extra>",
+        )
+    )
+    figure.update_layout(
+        title="Retirement success probability by scenario",
+        xaxis_title="Success probability (%)",
+        yaxis_title="",
+        showlegend=False,
+        height=max(260, 78 * len(scenarios)),
+        **_LAYOUT_DEFAULTS,
+    )
+    figure.update_xaxes(range=[0, 108], ticksuffix="%", gridcolor=COLOR_GRID)
+    figure.update_yaxes(autorange="reversed")
+    return figure
+
+
+def sensitivity_chart(sensitivity, baseline_value: float | None = None) -> go.Figure:
+    """Plot success probability against the swept input value.
+
+    A marker on the baseline value shows where the current plan sits on the curve.
+    """
+    probabilities = [value * 100 for value in sensitivity.success_probabilities]
+    is_rate = sensitivity.field_name in {"expected_return", "volatility", "inflation_rate"}
+    x_values = [v * 100 for v in sensitivity.values] if is_rate else sensitivity.values
+
+    figure = go.Figure(
+        go.Scatter(
+            x=x_values,
+            y=probabilities,
+            mode="lines+markers",
+            line=dict(color=COLOR_MEDIAN, width=2.6),
+            marker=dict(size=7, color=COLOR_MEDIAN),
+            name="Success probability",
+            hovertemplate="%{x}<br>Success probability %{y:.1f}%<extra></extra>",
+        )
+    )
+
+    if baseline_value is not None:
+        marker_x = baseline_value * 100 if is_rate else baseline_value
+        figure.add_vline(
+            x=marker_x, line=dict(color=COLOR_MARKER, width=1.6, dash="dash")
+        )
+        figure.add_annotation(
+            x=marker_x,
+            y=1.03,
+            yref="paper",
+            text="Current plan",
+            showarrow=False,
+            font=dict(color=COLOR_MARKER, size=12),
+            xanchor="left",
+            xshift=6,
+        )
+
+    axis_title = f"{sensitivity.label} (%)" if is_rate else sensitivity.label
+    figure.update_layout(
+        title=f"Success probability versus {sensitivity.label.lower()}",
+        xaxis_title=axis_title,
+        yaxis_title="Success probability (%)",
+        showlegend=False,
+        height=430,
+        **_LAYOUT_DEFAULTS,
+    )
+    figure.update_yaxes(range=[0, 105], ticksuffix="%", gridcolor=COLOR_GRID)
+    figure.update_xaxes(gridcolor=COLOR_GRID)
+    if not is_rate and sensitivity.field_name not in {"retirement_age", "life_expectancy"}:
+        figure.update_xaxes(tickprefix="$", separatethousands=True)
+    return figure
