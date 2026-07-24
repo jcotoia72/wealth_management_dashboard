@@ -29,6 +29,32 @@ def all_answers(score: int) -> dict[str, int]:
     return {question["id"]: score for question in RISK_QUESTIONS}
 
 
+def _scores_for_overall(target: float) -> dict[str, int]:
+    """Return answers whose overall score is closest to ``target`` (0-100).
+
+    Overall is the minimum of the two category axes, and equal answers across every
+    question produce equal tolerance and capacity, so a single uniform answer level
+    maps directly onto a score. This searches the achievable uniform-level scores and
+    the fractional mixes between adjacent levels to get close to the target.
+    """
+    from models.risk_profile import score_questionnaire
+
+    best_answers = all_answers(3)
+    best_gap = abs(score_questionnaire(best_answers).overall_score - target)
+
+    # Try uniform levels and simple mixes (some questions one level, rest the next).
+    question_ids = [q["id"] for q in RISK_QUESTIONS]
+    for base_level in range(1, 5):
+        for n_upgraded in range(len(question_ids) + 1):
+            answers = {qid: base_level for qid in question_ids}
+            for qid in question_ids[:n_upgraded]:
+                answers[qid] = base_level + 1
+            gap = abs(score_questionnaire(answers).overall_score - target)
+            if gap < best_gap:
+                best_gap, best_answers = gap, dict(answers)
+    return best_answers
+
+
 def make_inputs(**overrides) -> RetirementInputs:
     """A valid baseline for testing the planner hand-off."""
     base = dict(
@@ -219,6 +245,115 @@ def test_more_aggressive_profiles_have_higher_return_and_volatility() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Interpolation: the core of the continuous mapping
+# ---------------------------------------------------------------------------
+def test_interpolation_hits_the_spectrum_endpoints() -> None:
+    """Score 0 and 100 must land on the configured floor and ceiling (rounded)."""
+    from models.risk_profile import interpolate_assumptions
+    from utils.assumptions import RISK_SPECTRUM
+
+    ret_lo, vol_lo = interpolate_assumptions(0.0)
+    ret_hi, vol_hi = interpolate_assumptions(100.0)
+
+    increment = RISK_SPECTRUM["rounding"]
+    assert ret_lo == pytest.approx(RISK_SPECTRUM["return_floor"], abs=increment)
+    assert vol_lo == pytest.approx(RISK_SPECTRUM["volatility_floor"], abs=increment)
+    assert ret_hi == pytest.approx(RISK_SPECTRUM["return_ceiling"], abs=increment)
+    assert vol_hi == pytest.approx(RISK_SPECTRUM["volatility_ceiling"], abs=increment)
+
+
+def test_interpolation_is_monotonic_across_the_range() -> None:
+    """Higher scores must never produce lower return or volatility."""
+    from models.risk_profile import interpolate_assumptions
+
+    returns, vols = [], []
+    for score in range(0, 101, 5):
+        r, v = interpolate_assumptions(float(score))
+        returns.append(r)
+        vols.append(v)
+    assert returns == sorted(returns)
+    assert vols == sorted(vols)
+
+
+def test_interpolation_is_rounded_to_the_configured_increment() -> None:
+    """Every interpolated rate must be a clean multiple of the rounding increment."""
+    from models.risk_profile import interpolate_assumptions
+    from utils.assumptions import RISK_SPECTRUM
+
+    increment = RISK_SPECTRUM["rounding"]
+    for score in (12.0, 37.5, 58.3, 81.9, 99.0):
+        r, v = interpolate_assumptions(score)
+        # A value that is a multiple of the increment leaves ~0 remainder.
+        assert r / increment == pytest.approx(round(r / increment), abs=1e-6)
+        assert v / increment == pytest.approx(round(v / increment), abs=1e-6)
+
+
+def test_two_scores_in_the_same_band_can_differ() -> None:
+    """The whole point: two scores in one band need not share assumptions.
+
+    Snapping to a preset would give these identical numbers; interpolation should not.
+    """
+    lower = score_questionnaire(_scores_for_overall(58))
+    higher = score_questionnaire(_scores_for_overall(68))
+
+    # The higher score must carry higher-or-equal assumptions, and across this gap
+    # they should genuinely differ — which snapping to a single preset would prevent.
+    assert higher.expected_return >= lower.expected_return
+    assert higher.volatility >= lower.volatility
+    assert (
+        higher.expected_return != lower.expected_return
+        or higher.volatility != lower.volatility
+    )
+
+
+def test_volatility_rises_faster_than_return() -> None:
+    """Volatility should accelerate relative to return as risk increases.
+
+    Comparing the low half and high half of the spectrum, volatility should gain a
+    larger share of its total range than return does — the diminishing risk-adjusted
+    reward the curve shapes are meant to capture.
+    """
+    from models.risk_profile import interpolate_assumptions
+    from utils.assumptions import RISK_SPECTRUM
+
+    r_mid, v_mid = interpolate_assumptions(50.0)
+
+    return_range = RISK_SPECTRUM["return_ceiling"] - RISK_SPECTRUM["return_floor"]
+    vol_range = RISK_SPECTRUM["volatility_ceiling"] - RISK_SPECTRUM["volatility_floor"]
+    return_progress = (r_mid - RISK_SPECTRUM["return_floor"]) / return_range
+    vol_progress = (v_mid - RISK_SPECTRUM["volatility_floor"]) / vol_range
+
+    # At the midpoint, return should be further along its range than volatility,
+    # because return front-loads (curve < 1) and volatility back-loads (curve > 1).
+    assert return_progress > vol_progress
+
+
+def test_nearest_preset_is_a_real_preset() -> None:
+    """The label's nearest preset must exist and never be 'Custom'."""
+    for level in (1, 2, 3, 4, 5):
+        profile = score_questionnaire(all_answers(level))
+        assert profile.nearest_preset in PORTFOLIO_PRESETS
+        assert profile.nearest_preset != "Custom"
+
+
+def test_descriptive_label_reflects_within_band_position() -> None:
+    """Scores at different positions must produce different descriptive labels.
+
+    The label encodes where in a band the score sits (cautious / solidly / leaning),
+    so two clearly different scores should not share a label.
+    """
+    low = score_questionnaire(_scores_for_overall(40))
+    high = score_questionnaire(_scores_for_overall(70))
+    assert low.descriptive_label != high.descriptive_label
+    # The label vocabulary should be one of the three within-band descriptors.
+    for profile in (low, high):
+        assert any(
+            word in profile.descriptive_label.lower()
+            for word in ("cautious", "solidly", "leaning")
+        )
+
+
+# ---------------------------------------------------------------------------
 # Service formatting
 # ---------------------------------------------------------------------------
 def test_score_table_has_three_measures() -> None:
@@ -243,11 +378,11 @@ def test_all_profiles_table_lists_every_band() -> None:
 
 
 def test_narrative_names_the_level_and_portfolio() -> None:
-    """The narrative must state the recommended level and portfolio."""
+    """The narrative must state the descriptive label and nearest portfolio."""
     profile = score_questionnaire(all_answers(5))
     narrative = build_profile_narrative(profile)
-    assert profile.level in narrative
-    assert profile.recommended_preset in narrative
+    assert profile.descriptive_label in narrative
+    assert profile.nearest_preset in narrative
 
 
 def test_default_answers_covers_all_questions() -> None:
