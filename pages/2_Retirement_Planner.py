@@ -60,6 +60,10 @@ page_header(
 # Defined here (not imported) so this page has no dependency on the risk page.
 PLANNER_PREFILL_KEY = "planner_prefill_assumptions"
 
+# Session-state key holding a widget-independent copy of the sidebar inputs, so they
+# survive the user navigating to another page and back.
+PERSIST_KEY = "planner_input_persistence"
+
 # If the Risk Profile module sent portfolio assumptions here, point the user to the
 # toggle in the sidebar that applies them automatically.
 _prefill = st.session_state.get(PLANNER_PREFILL_KEY)
@@ -79,6 +83,18 @@ def _collect_inputs() -> dict[str, object]:
     Widget minimums and maximums come from :data:`utils.assumptions.BOUNDS` so the UI
     and the validation layer can never disagree.
     """
+    # Streamlit can drop a widget's keyed value when the widget is not rendered — which
+    # happens to every sidebar input while the user is on another page. To make inputs
+    # survive navigation, the assembled values are mirrored into a plain dict under
+    # PERSIST_KEY (not tied to any widget), and each widget's key is re-seeded from that
+    # dict here, before the widgets are created.
+    saved = st.session_state.get(PERSIST_KEY, {})
+    for widget_key, value in saved.items():
+        # Only seed keys that are not already live this run, so an in-progress edit is
+        # never overwritten by the saved copy.
+        if widget_key not in st.session_state:
+            st.session_state[widget_key] = value
+
     st.sidebar.markdown("### Plan inputs")
 
     with st.sidebar.expander("Personal timeline", expanded=True):
@@ -291,6 +307,14 @@ def _collect_inputs() -> dict[str, object]:
             key="in_dollar_basis",
         )
 
+    # Mirror every widget's current value into a persistence dict that is not tied to
+    # any widget, so the values survive navigating away from this page and back.
+    st.session_state[PERSIST_KEY] = {
+        key: st.session_state[key]
+        for key in st.session_state
+        if isinstance(key, str) and key.startswith("in_")
+    }
+
     return {
         "current_age": current_age,
         "retirement_age": retirement_age,
@@ -436,6 +460,7 @@ if reset_clicked:
             del st.session_state[state_key]
     st.session_state.pop(RESULTS_SESSION_KEY, None)
     st.session_state.pop(PLANNER_PREFILL_KEY, None)
+    st.session_state.pop(PERSIST_KEY, None)
     st.rerun()
 
 inputs = build_inputs(raw_inputs)
