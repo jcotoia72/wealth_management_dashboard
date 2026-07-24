@@ -45,8 +45,9 @@ def build_contribution_table(profile: RiskProfile) -> pd.DataFrame:
 def build_recommendation_table(profile: RiskProfile) -> pd.DataFrame:
     """Return the recommended portfolio's assumptions."""
     rows = [
-        ("Recommended profile", profile.level),
-        ("Model portfolio", profile.recommended_preset),
+        ("Risk profile", profile.descriptive_label),
+        ("Overall score", f"{profile.overall_score:.0f} / 100"),
+        ("Closest model portfolio", profile.nearest_preset),
         ("Expected annual return", format_percent(profile.expected_return)),
         ("Annual volatility", format_percent(profile.volatility)),
     ]
@@ -73,10 +74,14 @@ def build_all_profiles_table() -> pd.DataFrame:
 def build_profile_narrative(profile: RiskProfile) -> str:
     """Write a short plain-English explanation of the recommendation."""
     sentences = [
-        f"Based on the questionnaire, this client's risk profile is **{profile.level}**, "
-        f"which maps to a {profile.recommended_preset} model portfolio with an assumed "
-        f"return of {format_percent(profile.expected_return)} and volatility of "
+        f"Based on the questionnaire, this client's risk profile is "
+        f"**{profile.descriptive_label}** (overall score {profile.overall_score:.0f} "
+        f"out of 100), with assumptions interpolated to an expected return of "
+        f"{format_percent(profile.expected_return)} and volatility of "
         f"{format_percent(profile.volatility)}.",
+        f"That places them closest to a {profile.nearest_preset} model portfolio, "
+        "though the assumptions are tuned to their specific score rather than snapped "
+        "to that preset.",
         f"The profile reflects a risk tolerance score of "
         f"{profile.tolerance_score:.0f} and a risk capacity score of "
         f"{profile.capacity_score:.0f} out of 100.",
@@ -101,7 +106,7 @@ def build_profile_narrative(profile: RiskProfile) -> str:
 def build_planner_handoff_note(profile: RiskProfile) -> str:
     """Return the note shown when offering to send the profile to the planner."""
     return (
-        f"Apply the {profile.level} portfolio "
+        f"Apply the {profile.descriptive_label} assumptions "
         f"({format_percent(profile.expected_return)} return, "
         f"{format_percent(profile.volatility)} volatility) to the Retirement Planner "
         "as its investment assumptions."
