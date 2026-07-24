@@ -187,7 +187,18 @@ def render_results(profile) -> None:
 # ---------------------------------------------------------------------------
 answers = render_questionnaire()
 
-if st.button("Score questionnaire", type="primary"):
+_score_col, _reset_col = st.columns([2, 1])
+with _score_col:
+    score_clicked = st.button("Score questionnaire", type="primary", use_container_width=True)
+with _reset_col:
+    if st.button("Reset answers", use_container_width=True, help="Clear the questionnaire and result."):
+        for state_key in list(st.session_state.keys()):
+            if state_key.startswith("risk_"):
+                del st.session_state[state_key]
+        st.session_state.pop(RISK_PROFILE_SESSION_KEY, None)
+        st.rerun()
+
+if score_clicked:
     profile = score_questionnaire(answers)
     st.session_state[RISK_PROFILE_SESSION_KEY] = profile
 

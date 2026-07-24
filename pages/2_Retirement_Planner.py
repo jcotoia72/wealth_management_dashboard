@@ -89,6 +89,7 @@ def _collect_inputs() -> dict[str, object]:
             value=int(DEFAULTS["current_age"]),
             step=1,
             help="The client's age today.",
+            key="in_current_age",
         )
         retirement_age = st.number_input(
             "Retirement age",
@@ -97,6 +98,7 @@ def _collect_inputs() -> dict[str, object]:
             value=int(DEFAULTS["retirement_age"]),
             step=1,
             help="The age at which contributions stop and withdrawals begin.",
+            key="in_retirement_age",
         )
         life_expectancy = st.number_input(
             "Life expectancy (planning age)",
@@ -105,6 +107,7 @@ def _collect_inputs() -> dict[str, object]:
             value=int(DEFAULTS["life_expectancy"]),
             step=1,
             help="Planning horizon. A conservative planning age is common practice.",
+            key="in_life_expectancy",
         )
 
     with st.sidebar.expander("Current finances", expanded=True):
@@ -115,6 +118,7 @@ def _collect_inputs() -> dict[str, object]:
             value=float(DEFAULTS["current_savings"]),
             step=5_000.0,
             format="%.2f",
+            key="in_current_savings",
         )
         annual_contribution = st.number_input(
             "Annual contribution ($)",
@@ -124,6 +128,7 @@ def _collect_inputs() -> dict[str, object]:
             step=1_000.0,
             format="%.2f",
             help="Total annual savings including any employer match.",
+            key="in_annual_contribution",
         )
         contribution_growth_rate = (
             st.slider(
@@ -133,6 +138,7 @@ def _collect_inputs() -> dict[str, object]:
                 value=float(DEFAULTS["contribution_growth_rate"]) * 100,
                 step=0.25,
                 help="Rate at which the contribution grows each year, e.g. with salary.",
+                key="in_contribution_growth",
             )
             / 100
         )
@@ -169,9 +175,17 @@ def _collect_inputs() -> dict[str, object]:
         default_volatility = preset.get("volatility", DEFAULTS["volatility"])
 
         # When the profile toggle is on, its values take precedence over any preset.
+        # Because these two sliders are keyed (for persistence), a plain value= argument
+        # is ignored once the key exists in session state. To make the toggle actually
+        # drive them, write the profile value straight into their session-state slot
+        # before the widget renders.
         if use_profile and profile_prefill is not None:
-            default_return = profile_prefill["expected_return"]
-            default_volatility = profile_prefill["volatility"]
+            st.session_state["in_expected_return"] = profile_prefill["expected_return"] * 100
+            st.session_state["in_volatility"] = profile_prefill["volatility"] * 100
+        elif preset_name != "Custom":
+            # Selecting a named preset likewise fills the two sliders.
+            st.session_state["in_expected_return"] = default_return * 100
+            st.session_state["in_volatility"] = default_volatility * 100
 
         expected_return = (
             st.slider(
@@ -182,6 +196,7 @@ def _collect_inputs() -> dict[str, object]:
                 step=0.25,
                 help="Average annual return before inflation.",
                 disabled=use_profile,
+                key="in_expected_return",
             )
             / 100
         )
@@ -194,6 +209,7 @@ def _collect_inputs() -> dict[str, object]:
                 step=0.5,
                 help="Year-to-year variability of returns. Zero removes all randomness.",
                 disabled=use_profile,
+                key="in_volatility",
             )
             / 100
         )
@@ -209,6 +225,7 @@ def _collect_inputs() -> dict[str, object]:
                 max_value=BOUNDS["inflation_rate"][1] * 100,
                 value=float(DEFAULTS["inflation_rate"]) * 100,
                 step=0.25,
+                key="in_inflation",
             )
             / 100
         )
@@ -222,6 +239,7 @@ def _collect_inputs() -> dict[str, object]:
             step=2_500.0,
             format="%.2f",
             help="After-tax spending target in today's purchasing power.",
+            key="in_annual_spending",
         )
         annual_other_income = st.number_input(
             "Social Security / pension, today's dollars ($)",
@@ -231,6 +249,7 @@ def _collect_inputs() -> dict[str, object]:
             step=1_000.0,
             format="%.2f",
             help="Guaranteed income that reduces what the portfolio must provide.",
+            key="in_annual_other_income",
         )
         withdrawal_timing = st.radio(
             "Withdrawal timing",
@@ -243,6 +262,7 @@ def _collect_inputs() -> dict[str, object]:
             ),
             help="Beginning-of-year withdrawals are removed before that year's return "
             "is applied, which produces slightly lower outcomes.",
+            key="in_withdrawal_timing",
         )
 
     with st.sidebar.expander("Simulation settings", expanded=False):
@@ -251,6 +271,7 @@ def _collect_inputs() -> dict[str, object]:
             options=[1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000],
             value=int(DEFAULTS["n_simulations"]),
             help="More simulations give a smoother distribution but take longer.",
+            key="in_n_simulations",
         )
         random_seed = st.number_input(
             "Random seed",
@@ -259,6 +280,7 @@ def _collect_inputs() -> dict[str, object]:
             value=int(DEFAULTS["random_seed"]),
             step=1,
             help="The same seed and inputs always reproduce exactly the same results.",
+            key="in_random_seed",
         )
         dollar_basis = st.radio(
             "Display results in",
@@ -266,6 +288,7 @@ def _collect_inputs() -> dict[str, object]:
             index=0 if DEFAULTS["show_in_todays_dollars"] else 1,
             help="Today's dollars removes inflation so figures are comparable to "
             "current purchasing power.",
+            key="in_dollar_basis",
         )
 
     return {
@@ -350,13 +373,46 @@ def _render_results(results) -> None:
         for note in build_methodology_notes():
             st.markdown(f"- {note}")
 
-    csv = build_percentile_table(results).to_csv().encode("utf-8")
-    st.download_button(
-        "Download percentile table (CSV)",
-        data=csv,
-        file_name="retirement_percentiles.csv",
-        mime="text/csv",
+    st.markdown("<hr class='section-rule'>", unsafe_allow_html=True)
+    section_header(
+        "Downloads",
+        "Export the numbers for your own analysis, or a client-ready PDF summary.",
     )
+    client_name = st.text_input(
+        "Client name for the report (optional)",
+        placeholder="e.g. Jordan Sample",
+        key="report_client_name",
+    )
+
+    download_columns = st.columns(2, gap="medium")
+    with download_columns[0]:
+        csv = build_percentile_table(results).to_csv().encode("utf-8")
+        st.download_button(
+            "Download percentile table (CSV)",
+            data=csv,
+            file_name="retirement_percentiles.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with download_columns[1]:
+        # The report is only built when requested — generating the chart image and PDF
+        # takes a moment, so it should not run on every rerun.
+        if st.button("Prepare client report (PDF)", use_container_width=True):
+            with st.spinner("Building report..."):
+                from services.report_service import build_client_report
+
+                st.session_state["client_report_pdf"] = build_client_report(
+                    results, client_name=client_name
+                )
+        report_bytes = st.session_state.get("client_report_pdf")
+        if report_bytes:
+            st.download_button(
+                "Download client report (PDF)",
+                data=report_bytes,
+                file_name="retirement_summary.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +420,23 @@ def _render_results(results) -> None:
 # ---------------------------------------------------------------------------
 raw_inputs = _collect_inputs()
 st.sidebar.markdown("---")
-run_clicked = st.sidebar.button("Run simulation", type="primary", use_container_width=True)
+
+_run_col, _reset_col = st.sidebar.columns([2, 1])
+with _run_col:
+    run_clicked = st.button("Run simulation", type="primary", use_container_width=True)
+with _reset_col:
+    reset_clicked = st.button("Reset", use_container_width=True, help="Clear inputs and results.")
+
+if reset_clicked:
+    # Clear every keyed input plus the stored projection, then rerun so the widgets
+    # rebuild at their defaults. Keys are removed rather than reassigned because a
+    # widget's value cannot be set both by session state and a value= argument.
+    for state_key in list(st.session_state.keys()):
+        if state_key.startswith("in_"):
+            del st.session_state[state_key]
+    st.session_state.pop(RESULTS_SESSION_KEY, None)
+    st.session_state.pop(PLANNER_PREFILL_KEY, None)
+    st.rerun()
 
 inputs = build_inputs(raw_inputs)
 errors = validate(inputs)

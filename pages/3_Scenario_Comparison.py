@@ -427,6 +427,13 @@ else:
         f"Holds up to {MAX_SCENARIOS} scenarios at a time.",
     )
     render_library(saved_scenarios)
+    if saved_scenarios and st.button(
+        "Clear all scenarios", help="Remove every saved scenario and start over."
+    ):
+        st.session_state[SCENARIOS_SESSION_KEY] = []
+        st.session_state.pop("latest_sweep", None)
+        st.session_state.pop("latest_levers", None)
+        st.rerun()
 
     st.markdown("<hr class='section-rule'>", unsafe_allow_html=True)
     section_header("Add a scenario")
