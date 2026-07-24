@@ -74,7 +74,7 @@ The projection has two phases:
 
 - Professional landing page with module cards and status indicators
 - Client Overview page that reads the latest projection from session state
-- Four clearly labelled "Coming Soon" modules with their planned capabilities
+- Three clearly labelled "Coming Soon" modules with their planned capabilities
 - Consistent styling, formatting and disclaimer across every page
 
 **Engineering**
@@ -82,7 +82,7 @@ The projection has two phases:
 - Financial model completely separated from the interface (no Streamlit in the engine)
 - Dataclasses `RetirementInputs` and `SimulationResults`
 - Type hints and docstrings throughout
-- 35 pytest tests covering reproducibility, validation, financial logic and edge cases
+- 62 pytest tests covering reproducibility, validation, financial logic and edge cases
 
 ---
 
@@ -111,18 +111,20 @@ wealth_management_dashboard/
 ├── pages/                          One file per module; Streamlit builds the sidebar from these
 │   ├── 1_Client_Overview.py        Summary of the latest projection (functional)
 │   ├── 2_Retirement_Planner.py     The Monte Carlo planner (fully functional)
-│   ├── 3_Scenario_Comparison.py    Placeholder
+│   ├── 3_Scenario_Comparison.py    Scenario comparison and sensitivity (functional)
 │   ├── 4_Portfolio_Analysis.py     Placeholder
 │   ├── 5_Portfolio_Optimizer.py    Placeholder
 │   └── 6_Risk_Profile.py           Placeholder
 │
 ├── models/
 │   ├── __init__.py
-│   └── monte_carlo.py              Simulation engine, RetirementInputs, SimulationResults
+│   ├── monte_carlo.py              Simulation engine, RetirementInputs, SimulationResults
+│   └── comparison.py               Scenario, sensitivity sweeps, lever analysis
 │
 ├── services/
 │   ├── __init__.py
-│   └── retirement_service.py       Builds inputs, tables and the client narrative
+│   ├── retirement_service.py       Builds inputs, tables and the client narrative
+│   └── scenario_service.py         Comparison tables and comparison narrative
 │
 ├── components/
 │   ├── __init__.py
@@ -138,7 +140,8 @@ wealth_management_dashboard/
 │
 ├── tests/
 │   ├── __init__.py
-│   └── test_monte_carlo.py         35 pytest tests
+│   ├── test_monte_carlo.py         35 tests for the simulation engine
+│   └── test_scenario.py            27 tests for scenario comparison
 │
 ├── .streamlit/config.toml          Shared visual theme
 ├── requirements.txt
@@ -268,7 +271,7 @@ pytest
 Expected output:
 
 ```
-35 passed
+62 passed
 ```
 
 Useful variations:
@@ -416,7 +419,9 @@ Each year's balance depends on the previous year's balance, so the years cannot 
 computed all at once. The engine therefore loops over years (typically 40–70 iterations)
 while every operation *inside* the loop applies to all 10,000 simulations
 simultaneously as NumPy array arithmetic. That is the practical vectorisation for a
-path-dependent model, and it runs a 10,000-path projection in roughly one second.
+path-dependent model. It runs a 10,000-path projection in roughly 0.03 seconds and
+100,000 paths in about 1.3 seconds; most of the perceived wait in the interface is
+chart rendering rather than the simulation.
 
 ---
 
@@ -511,7 +516,7 @@ should change, but the success probability must not move by even one path.
 **Check 9 — Non-negative balances.** No chart, table or metric should ever display a
 negative balance under any inputs, including 95% volatility.
 
-**Check 10 — The automated suite.** Run `pytest`. All 35 tests assert the behaviours
+**Check 10 — The automated suite.** Run `pytest`. All 62 tests assert the behaviours
 above programmatically.
 
 ### Reference output
@@ -539,7 +544,7 @@ refactor.
 
 | Module | Planned capability |
 |---|---|
-| Scenario Comparison | Save several projections and compare success probability, percentile balances and median paths side by side; sensitivity analysis on retirement age, savings rate and spending |
+| ~~Scenario Comparison~~ | **Built.** Side-by-side comparison, one-variable sensitivity sweeps, and ranking of which single change most improves the plan |
 | Portfolio Analysis | Upload holdings from CSV; allocation, concentration, historical return, volatility, drawdown and Sharpe ratio |
 | Portfolio Optimizer | Mean-variance optimisation, efficient frontier, maximum-Sharpe and minimum-variance portfolios, weight constraints |
 | Risk Profile | Risk questionnaire scored to a model portfolio, then handed back to the planner as return and volatility assumptions |
@@ -580,7 +585,7 @@ financial logic — it mainly stores a list of results objects and charts them t
 | Port 8501 already in use | `streamlit run app.py --server.port 8502` |
 | Browser does not open | Open <http://localhost:8501> manually. |
 | Changes not appearing | Streamlit reloads on save; if not, press **R** in the browser or restart the server. |
-| Simulation feels slow | Reduce the simulation count to 5,000 in the sidebar. 10,000 should take about a second. |
+| Simulation feels slow | Reduce the simulation count to 5,000 in the sidebar. The engine itself takes about 0.03 seconds; the rest is chart rendering. |
 | `pytest` collects nothing | Run it from the project root, where `pytest.ini` lives. |
 
 ---

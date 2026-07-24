@@ -67,7 +67,11 @@ status_columns = st.columns(4, gap="medium")
 with status_columns[0]:
     st.metric("Retirement Planner", "Active", help="Fully implemented in this version.")
 with status_columns[1]:
-    st.metric("Modules available", "2 of 6", help="Client Overview and Retirement Planner.")
+    st.metric(
+        "Modules available",
+        "3 of 6",
+        help="Client Overview, Retirement Planner and Scenario Comparison.",
+    )
 with status_columns[2]:
     if results is None:
         st.metric("Latest projection", "Not run")
