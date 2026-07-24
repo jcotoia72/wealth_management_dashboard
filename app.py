@@ -69,8 +69,8 @@ with status_columns[0]:
 with status_columns[1]:
     st.metric(
         "Modules available",
-        "3 of 6",
-        help="Client Overview, Retirement Planner and Scenario Comparison.",
+        "4 of 6",
+        help="Client Overview, Retirement Planner, Scenario Comparison and Risk Profile.",
     )
 with status_columns[2]:
     if results is None:
