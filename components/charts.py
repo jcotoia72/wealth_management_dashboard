@@ -376,3 +376,61 @@ def sensitivity_chart(sensitivity, baseline_value: float | None = None) -> go.Fi
     if not is_rate and sensitivity.field_name not in {"retirement_age", "life_expectancy"}:
         figure.update_xaxes(tickprefix="$", separatethousands=True)
     return figure
+
+
+# ---------------------------------------------------------------------------
+# Risk profile chart
+# ---------------------------------------------------------------------------
+def risk_gauge_chart(tolerance: float, capacity: float, overall: float) -> go.Figure:
+    """Plot tolerance, capacity and overall scores on a shared 0-100 axis.
+
+    A horizontal lollipop layout keeps the three scores directly comparable and makes
+    the gap between tolerance and capacity — the point of the two-axis approach — easy
+    to read at a glance.
+    """
+    labels = ["Risk tolerance", "Risk capacity", "Overall"]
+    values = [tolerance, capacity, overall]
+    colors = [COLOR_MEDIAN, "#3d7a5a", COLOR_MARKER]
+
+    figure = go.Figure()
+
+    # Shaded bands behind the markers, matching the four risk levels.
+    band_edges = [(0, 35, "#eef1f4"), (35, 55, "#e7edf2"), (55, 75, "#dfe8ef"), (75, 100, "#d6e2ec")]
+    for low, high, shade in band_edges:
+        figure.add_vrect(x0=low, x1=high, fillcolor=shade, line_width=0, layer="below")
+
+    for label, value, color in zip(labels, values, colors):
+        figure.add_trace(
+            go.Scatter(
+                x=[0, value],
+                y=[label, label],
+                mode="lines",
+                line=dict(color=color, width=3),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=[value],
+                y=[label],
+                mode="markers+text",
+                marker=dict(color=color, size=16),
+                text=[f"{value:.0f}"],
+                textposition="middle right",
+                textfont=dict(size=13, color="#33414f"),
+                hovertemplate=f"{label}: {value:.0f} / 100<extra></extra>",
+                showlegend=False,
+            )
+        )
+
+    figure.update_layout(
+        title="Risk scores on a 0-100 scale",
+        xaxis_title="Score (higher = more risk-seeking)",
+        yaxis_title="",
+        height=300,
+        **_LAYOUT_DEFAULTS,
+    )
+    figure.update_xaxes(range=[0, 108], gridcolor=COLOR_GRID)
+    figure.update_yaxes(autorange="reversed")
+    return figure

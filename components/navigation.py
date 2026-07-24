@@ -80,8 +80,8 @@ MODULES: list[dict[str, str]] = [
     {
         "name": "Risk Profile",
         "path": "pages/6_Risk_Profile.py",
-        "status": "planned",
-        "description": "Risk-tolerance questionnaire mapped to a recommended target allocation.",
+        "status": "active",
+        "description": "Score risk tolerance and capacity, map to a model portfolio, and send it to the planner.",
     },
 ]
 
