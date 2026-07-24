@@ -62,8 +62,8 @@ MODULES: list[dict[str, str]] = [
     {
         "name": "Scenario Comparison",
         "path": "pages/3_Scenario_Comparison.py",
-        "status": "planned",
-        "description": "Run several plans side by side to compare retirement ages, savings rates and spending levels.",
+        "status": "active",
+        "description": "Compare plans side by side, sweep one assumption at a time, and rank which change helps most.",
     },
     {
         "name": "Portfolio Analysis",
