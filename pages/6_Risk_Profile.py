@@ -150,9 +150,8 @@ def render_results(profile) -> None:
             "source": profile.level,
         }
         st.success(
-            "Saved. Open the Retirement Planner — it will note the profile's assumptions "
-            "are ready to use. Set the return and volatility sliders to the values shown "
-            "above to match this profile."
+            "Saved. Open the Retirement Planner and switch on the **Use Risk Profile "
+            "assumptions** toggle in the sidebar to apply these values automatically."
         )
         st.page_link("pages/2_Retirement_Planner.py", label="Go to the Retirement Planner")
 

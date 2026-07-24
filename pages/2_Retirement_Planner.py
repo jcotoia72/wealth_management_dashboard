@@ -56,16 +56,20 @@ page_header(
     "thousands of simulated market paths.",
 )
 
-# If the Risk Profile module sent portfolio assumptions here, surface them so the user
-# knows what values to set. (Streamlit widget defaults are fixed at creation, so the
-# cleanest cross-page hand-off is to show the target values rather than force them.)
-_prefill = st.session_state.get("planner_prefill_assumptions")
+# Session-state key holding assumptions handed over from the Risk Profile module.
+# Defined here (not imported) so this page has no dependency on the risk page.
+PLANNER_PREFILL_KEY = "planner_prefill_assumptions"
+
+# If the Risk Profile module sent portfolio assumptions here, point the user to the
+# toggle in the sidebar that applies them automatically.
+_prefill = st.session_state.get(PLANNER_PREFILL_KEY)
 if _prefill is not None:
     st.info(
-        f"**Risk Profile suggestion available.** The {_prefill['source']} profile "
-        f"recommends an expected return of {_prefill['expected_return'] * 100:.1f}% and "
-        f"volatility of {_prefill['volatility'] * 100:.1f}%. Set the investment-assumption "
-        "sliders in the sidebar to these values to run that profile."
+        f"**Risk Profile assumptions available.** The {_prefill['source']} profile "
+        f"recommends {_prefill['expected_return'] * 100:.1f}% return and "
+        f"{_prefill['volatility'] * 100:.1f}% volatility. Use the "
+        "**Use Risk Profile assumptions** toggle in the Investment assumptions section "
+        "of the sidebar to apply them automatically."
     )
 
 
@@ -134,15 +138,40 @@ def _collect_inputs() -> dict[str, object]:
         )
 
     with st.sidebar.expander("Investment assumptions", expanded=True):
+        # If the Risk Profile module sent assumptions here, offer a toggle that drives
+        # the return and volatility sliders from the profile and locks them. Streamlit
+        # widget values are only set at creation time, so the reliable way to "push"
+        # values into a slider is to supply them as the value AND disable the slider —
+        # a live slider would let the user's manual drag win on the next rerun.
+        profile_prefill = st.session_state.get(PLANNER_PREFILL_KEY)
+        use_profile = False
+        if profile_prefill is not None:
+            use_profile = st.toggle(
+                f"Use Risk Profile assumptions "
+                f"({profile_prefill['source']}: "
+                f"{profile_prefill['expected_return'] * 100:.1f}% / "
+                f"{profile_prefill['volatility'] * 100:.1f}%)",
+                value=True,
+                help="When on, the return and volatility below are set by the Risk "
+                "Profile result and cannot be edited here. Turn off to adjust them "
+                "manually.",
+            )
+
         preset_name = st.selectbox(
             "Portfolio preset",
             options=list(PORTFOLIO_PRESETS.keys()),
             index=list(PORTFOLIO_PRESETS.keys()).index("Custom"),
             help="Selecting a preset fills the return and volatility assumptions below.",
+            disabled=use_profile,
         )
         preset = PORTFOLIO_PRESETS.get(preset_name, {})
         default_return = preset.get("expected_return", DEFAULTS["expected_return"])
         default_volatility = preset.get("volatility", DEFAULTS["volatility"])
+
+        # When the profile toggle is on, its values take precedence over any preset.
+        if use_profile and profile_prefill is not None:
+            default_return = profile_prefill["expected_return"]
+            default_volatility = profile_prefill["volatility"]
 
         expected_return = (
             st.slider(
@@ -152,6 +181,7 @@ def _collect_inputs() -> dict[str, object]:
                 value=float(default_return) * 100,
                 step=0.25,
                 help="Average annual return before inflation.",
+                disabled=use_profile,
             )
             / 100
         )
@@ -163,9 +193,15 @@ def _collect_inputs() -> dict[str, object]:
                 value=float(default_volatility) * 100,
                 step=0.5,
                 help="Year-to-year variability of returns. Zero removes all randomness.",
+                disabled=use_profile,
             )
             / 100
         )
+        if use_profile:
+            st.caption(
+                "Return and volatility are set by the Risk Profile. Turn off the toggle "
+                "above to edit them."
+            )
         inflation_rate = (
             st.slider(
                 "Annual inflation (%)",
