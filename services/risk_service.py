@@ -47,7 +47,6 @@ def build_recommendation_table(profile: RiskProfile) -> pd.DataFrame:
     rows = [
         ("Risk profile", profile.descriptive_label),
         ("Overall score", f"{profile.overall_score:.0f} / 100"),
-        ("Closest model portfolio", profile.nearest_preset),
         ("Expected annual return", format_percent(profile.expected_return)),
         ("Annual volatility", format_percent(profile.volatility)),
     ]
@@ -79,9 +78,8 @@ def build_profile_narrative(profile: RiskProfile) -> str:
         f"out of 100), with assumptions interpolated to an expected return of "
         f"{format_percent(profile.expected_return)} and volatility of "
         f"{format_percent(profile.volatility)}.",
-        f"That places them closest to a {profile.nearest_preset} model portfolio, "
-        "though the assumptions are tuned to their specific score rather than snapped "
-        "to that preset.",
+        "The assumptions are tuned to this specific score rather than snapped to a "
+        "fixed model portfolio.",
         f"The profile reflects a risk tolerance score of "
         f"{profile.tolerance_score:.0f} and a risk capacity score of "
         f"{profile.capacity_score:.0f} out of 100.",
